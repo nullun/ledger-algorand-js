@@ -68,20 +68,6 @@ export class AlgorandApp extends BaseApp {
         }
     }
 
-    private prepareChunksWithAccountId(accountId: number, message: Buffer): Buffer[] {
-        const chunks = this.messageToChunks(message)
-        const accountIdBuffer = Buffer.alloc(4);
-        accountIdBuffer.writeUInt32BE(accountId)
-        chunks.unshift(accountIdBuffer)
-        return chunks
-    }
-
-    private extractAccountIdFromSerializedPath(path: Buffer): number {
-        const HARDENED = 0x80000000;
-        const accountId = path.readUInt32LE(8) & ~HARDENED;
-        return accountId;
-    }
-
     protected async sendGenericChunk(ins: number, p2: number, chunkIdx: number, chunkNum: number, chunk: Buffer, p1?: number): Promise<ResponsePayload> {
         if (p1 === undefined) {
             p1 = chunkIdx === 0 ? AlgorandApp._params.p1ValuesSign.P1_FIRST_ACCOUNT_ID : AlgorandApp._params.p1ValuesSign.P1_MORE;
@@ -95,10 +81,45 @@ export class AlgorandApp extends BaseApp {
         return response
     }
 
-    async getAddressAndPubKey(path: string, showAddrInDevice = false): Promise<ResponseAddress> {
-        const bip44PathBuffer = this.serializePath(path)
-        const p1 = showAddrInDevice ? AlgorandApp._params.p1Values.SHOW_ADDRESS_IN_DEVICE : AlgorandApp._params.p1Values.ONLY_RETRIEVE
-        const accountId = this.extractAccountIdFromSerializedPath(bip44PathBuffer)
+    async signGetChunks(accountId: number, message: string | Buffer) {
+        return AlgorandApp.prepareChunksFromAccountId(accountId, message);
+    }
+
+    static prepareChunksFromAccountId(accountId: number, message: string | Buffer) {
+        const chunks = [];
+
+        // First chunk prepend accountId if != 0
+        let messageBuffer;
+
+        if (typeof message === 'string') {
+            messageBuffer = Buffer.from(message);
+        } else {
+            messageBuffer = message;
+        }
+
+        let buffer : Buffer;
+
+        if (accountId !== 0) {
+            const accountIdBuffer = Buffer.alloc(4);
+            accountIdBuffer.writeUInt32BE(accountId)
+            buffer = Buffer.concat([accountIdBuffer, messageBuffer]);
+        } else {
+            buffer = Buffer.concat([messageBuffer]);
+        }
+
+        for (let i = 0; i < buffer.length; i += AlgorandApp._params.chunkSize) {
+            let end = i + AlgorandApp._params.chunkSize;
+            if (i > buffer.length) {
+                end = buffer.length;
+            }
+            chunks.push(buffer.slice(i, end));
+        }
+
+        return chunks;
+    }
+
+    async getAddressAndPubKey(accountId = 0, requireConfirmation = false): Promise<ResponseAddress> {
+        const p1 = requireConfirmation ? AlgorandApp._params.p1Values.SHOW_ADDRESS_IN_DEVICE : AlgorandApp._params.p1Values.ONLY_RETRIEVE
         const data = Buffer.alloc(4);
         data.writeUInt32BE(accountId)
 
@@ -119,36 +140,8 @@ export class AlgorandApp extends BaseApp {
         }
     }
 
-    async getVersion() : Promise<ResponseVersion> {
-      try {
-        const responseBuffer = await this.transport.send(AlgorandApp._params.cla, AlgorandApp._INS.GET_VERSION, 0, 0)
-
-        const response = processResponse(responseBuffer)
-
-        const testMode = response.readBytes(1)[0] !== 0
-        const major = response.readBytes(2).readUInt16BE(0)
-        const minor = response.readBytes(2).readUInt16BE(0)
-        const patch = response.readBytes(2).readUInt16BE(0)
-        const deviceLocked = response.readBytes(1)[0] === 1
-        const targetId = response.readBytes(4).toString('hex')
-
-        return {
-          testMode,
-          major,
-          minor,
-          patch,
-          deviceLocked,
-          targetId,
-        } as ResponseVersion
-      } catch (e) {
-        throw processErrorResponse(e)
-      }
-  }
-
-    async sign(path: BIP32Path, blob: Buffer): Promise<ResponseSign> {
-        const bip44PathBuffer = this.serializePath(path)
-        const accountId = this.extractAccountIdFromSerializedPath(bip44PathBuffer)
-        const chunks = this.prepareChunksWithAccountId(accountId, blob);
+    async sign(accountId = 0, message: string | Buffer) {
+        const chunks = AlgorandApp.prepareChunksFromAccountId(accountId, message);
 
         let p2 = (chunks.length > 1) ? AlgorandApp._params.p2Values.P2_MORE_CHUNKS : AlgorandApp._params.p2Values.P2_LAST_CHUNK;
 
@@ -164,6 +157,27 @@ export class AlgorandApp extends BaseApp {
                 signature: signatureResponse.readBytes(signatureResponse.length()),
             }
 
+        } catch (e) {
+            throw processErrorResponse(e)
+        }
+    }
+
+    /**
+     * @deprecated Use getAddressAndPubKey instead
+     */
+    async getPubkey(accountId = 0, requireConfirmation = false): Promise<ResponseAddress> {
+        const p1 = requireConfirmation ? AlgorandApp._params.p1Values.SHOW_ADDRESS_IN_DEVICE : AlgorandApp._params.p1Values.ONLY_RETRIEVE
+        const data = Buffer.alloc(4);
+        data.writeUInt32BE(accountId)
+
+        try {
+            const responseBuffer = await this.transport.send(AlgorandApp._params.cla, AlgorandApp._INS.GET_PUBLIC_KEY, p1, 0, data)
+            const response = processResponse(responseBuffer)
+
+            return {
+                pubkey: response.readBytes(PUBKEYLEN),
+                address: response.getAvailableBuffer().toString(),
+            } as ResponseAddress
         } catch (e) {
             throw processErrorResponse(e)
         }
