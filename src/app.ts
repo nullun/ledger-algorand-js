@@ -14,10 +14,10 @@
  *  limitations under the License.
  ******************************************************************************* */
 import type Transport from '@ledgerhq/hw-transport'
-import BaseApp, {BIP32Path, ERROR_DESCRIPTION_OVERRIDE, INSGeneric, processErrorResponse, processResponse, ResponsePayload, ResponseVersion} from '@zondax/ledger-js'
+import BaseApp, {BIP32Path, ERROR_DESCRIPTION_OVERRIDE, INSGeneric, processErrorResponse, processResponse, ResponsePayload } from '@zondax/ledger-js'
 import {LedgerError} from './common'
 import {PUBKEYLEN} from './consts'
-import {ResponseSign, ResponseAddress} from './types'
+import {ResponseSign, ResponseAddress, ResponseVersion} from './types'
 
 enum ArbitrarySignError {
   ErrorInvalidScope = 0x6988,
@@ -116,6 +116,15 @@ export class AlgorandApp extends BaseApp {
         }
 
         return chunks;
+    }
+
+    async getVersion(): Promise<ResponseVersion> {
+        const response = await super.getVersion()
+        return {
+            ...response,
+            return_code: LedgerError.NoErrors,
+            returnCode: LedgerError.NoErrors,
+        } as ResponseVersion
     }
 
     async getAddressAndPubKey(accountId = 0, requireConfirmation = false): Promise<ResponseAddress> {
