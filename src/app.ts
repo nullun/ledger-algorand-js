@@ -14,10 +14,10 @@
  *  limitations under the License.
  ******************************************************************************* */
 import type Transport from '@ledgerhq/hw-transport'
-import BaseApp, {BIP32Path, ERROR_DESCRIPTION_OVERRIDE, INSGeneric, LedgerError, processErrorResponse, processResponse, ResponsePayload, ResponseVersion} from '@zondax/ledger-js'
-
+import BaseApp, {BIP32Path, ERROR_DESCRIPTION_OVERRIDE, INSGeneric, processErrorResponse, processResponse, ResponsePayload, ResponseVersion} from '@zondax/ledger-js'
+import {LedgerError} from './common'
 import {PUBKEYLEN} from './consts'
-import {ResponseSign, ResponseAddress, StdSigData, StdSignMetadata, StdSigDataResponse} from './types'
+import {ResponseSign, ResponseAddress} from './types'
 
 enum ArbitrarySignError {
   ErrorInvalidScope = 0x6988,
@@ -132,15 +132,20 @@ export class AlgorandApp extends BaseApp {
             const address = response.getAvailableBuffer().toString()
 
             return {
-                pubkey,
-                address,
+                publicKey: Buffer.from(pubkey),
+                address: Buffer.from(address),
+                return_code: LedgerError.NoErrors,
+                returnCode: LedgerError.NoErrors,
+                // Legacy
+                bech32_address: Buffer.from(address),
+                compressed_pk: Buffer.from(pubkey)
             } as ResponseAddress
         } catch (e) {
             throw processErrorResponse(e)
         }
     }
 
-    async sign(accountId = 0, message: string | Buffer) {
+    async sign(accountId = 0, message: string | Buffer): Promise<ResponseSign> {
         const chunks = AlgorandApp.prepareChunksFromAccountId(accountId, message);
 
         let p2 = (chunks.length > 1) ? AlgorandApp._params.p2Values.P2_MORE_CHUNKS : AlgorandApp._params.p2Values.P2_LAST_CHUNK;
@@ -155,7 +160,7 @@ export class AlgorandApp extends BaseApp {
 
             return {
                 signature: signatureResponse.readBytes(signatureResponse.length()),
-            }
+            } as ResponseSign
 
         } catch (e) {
             throw processErrorResponse(e)
@@ -172,11 +177,20 @@ export class AlgorandApp extends BaseApp {
 
         try {
             const responseBuffer = await this.transport.send(AlgorandApp._params.cla, AlgorandApp._INS.GET_PUBLIC_KEY, p1, 0, data)
+
             const response = processResponse(responseBuffer)
 
+            const pubkey = response.readBytes(PUBKEYLEN)
+            const address = response.getAvailableBuffer().toString()
+
             return {
-                pubkey: response.readBytes(PUBKEYLEN),
-                address: response.getAvailableBuffer().toString(),
+                publicKey: Buffer.from(pubkey),
+                address: Buffer.from(address),
+                return_code: LedgerError.NoErrors,
+                returnCode: LedgerError.NoErrors,
+                // Legacy
+                bech32_address: Buffer.from(address),
+                compressed_pk: Buffer.from(pubkey)
             } as ResponseAddress
         } catch (e) {
             throw processErrorResponse(e)

@@ -13,10 +13,6 @@
     "inlineSources": true,
     "rootDir": "./src"
   },
-  "exclude": [
-    "./dist/**"
-  ],
-  "include": [
-    "src/**/*"
-  ]
+  "exclude": ["node_modules", "./dist/**"],
+  "include": ["src/**/*"]
 }
