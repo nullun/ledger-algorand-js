@@ -63,7 +63,7 @@ describe('AlgorandApp', () => {
     it('should prepare message chunks correctly', () => {
       const message = Buffer.from('test message')
       const accountId = 0
-      const chunks = AlgorandApp.prepareChunks(accountId, message)
+      const chunks = AlgorandApp.prepareChunksFromAccountId(accountId, message)
 
       expect(chunks).toBeInstanceOf(Array)
       expect(chunks.length).toBeGreaterThan(0)
