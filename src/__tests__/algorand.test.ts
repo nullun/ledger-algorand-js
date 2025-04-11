@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Transport from '@ledgerhq/hw-transport'
 import { LedgerError } from '../common'
-import AlgorandApp from '../index'
+import { AlgorandApp } from '../index'
 
 // Mock the Transport class
 const mockSend = vi.fn()
@@ -63,7 +63,7 @@ describe('AlgorandApp', () => {
     it('should prepare message chunks correctly', () => {
       const message = Buffer.from('test message')
       const accountId = 0
-      const chunks = AlgorandApp.prepareChunks(accountId, message)
+      const chunks = AlgorandApp.prepareChunksFromAccountId(accountId, message)
 
       expect(chunks).toBeInstanceOf(Array)
       expect(chunks.length).toBeGreaterThan(0)
