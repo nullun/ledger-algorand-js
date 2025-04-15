@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import Transport from '@ledgerhq/hw-transport'
 import { LedgerError } from '../common'
-import AlgorandApp from '../index'
+import { AlgorandApp, ResponseSign, StdSigData, StdSigDataResponse } from '../index'
 
 // Mock the Transport class
 const mockSend = vi.fn()
@@ -48,14 +48,13 @@ describe('AlgorandApp', () => {
       mockSend.mockResolvedValue(mockResponse)
 
       const result = await app.getVersion()
-      expect(result).toBeDefined()
       expect(result.major).toBe(2)
       expect(result.minor).toBe(0)
       expect(result.patch).toBe(0)
       expect(result.returnCode).toBe(LedgerError.NoErrors)
       expect(result.testMode).toBe(false)
       expect(result.deviceLocked).toBe(false)
-      expect(result.targetId).toBe('0')
+      expect(result.targetId).toBe('00000000')
     })
   })
 
@@ -63,7 +62,7 @@ describe('AlgorandApp', () => {
     it('should prepare message chunks correctly', () => {
       const message = Buffer.from('test message')
       const accountId = 0
-      const chunks = AlgorandApp.prepareChunks(accountId, message)
+      const chunks = AlgorandApp.prepareChunksFromAccountId(accountId, message)
 
       expect(chunks).toBeInstanceOf(Array)
       expect(chunks.length).toBeGreaterThan(0)
@@ -85,10 +84,33 @@ describe('AlgorandApp', () => {
       mockSend.mockResolvedValue(mockResponse)
 
       const result = await app.getPubkey()
-      expect(result).toBeDefined()
-      expect(result.publicKey).toBeDefined()
-      expect(result.address).toBeDefined()
       expect(result.returnCode).toBe(LedgerError.NoErrors)
+      
+      // Add more specific expectations to verify correct parsing
+      expect(result.publicKey).toEqual(Buffer.from(Array(32).fill(1)))
+      expect(result.address).toEqual(Buffer.from(Array(58).fill(2)))
+    })
+  })
+
+  describe('getAddressAndPubKey', () => {
+    it('should return public key and address', async () => {
+      const mockResponse = Buffer.from([
+        // Mock public key (32 bytes)
+        ...Array(32).fill(1),
+        // Mock address (58 bytes)
+        ...Array(58).fill(2),
+        // Return code (2 bytes)
+        0x90,
+        0x00,
+      ])
+      mockSend.mockResolvedValue(mockResponse)
+
+      const result = await app.getAddressAndPubKey()
+      expect(result.returnCode).toBe(LedgerError.NoErrors)
+      
+      // Add more specific expectations to verify correct parsing
+      expect(result.publicKey).toEqual(Buffer.from(Array(32).fill(1)))
+      expect(result.address).toEqual(Buffer.from(Array(58).fill(2)))
     })
   })
 
@@ -106,9 +128,37 @@ describe('AlgorandApp', () => {
       mockSend.mockResolvedValue(mockResponse)
 
       const result = await app.sign(accountId, message)
-      expect(result).toBeDefined()
-      expect(result.signature).toBeDefined()
-      expect(result.return_code).toBe(LedgerError.NoErrors)
+      expect(result.returnCode).toBe(LedgerError.NoErrors)
+      expect(result.signature).toEqual(Buffer.from(Array(64).fill(1)))
+    })
+  })
+
+
+  describe('signData', () => {
+    it('should sign an arbitrary message', async () => {
+      const message: StdSigData = {
+        data: Buffer.from('{"test": "test"}').toString('base64'),
+        signer: Buffer.from('test signer'),
+        domain: 'test domain',
+        requestId: 'test requestId',
+        authenticationData: Buffer.from('test authenticationData'),
+        hdPath: "m/44'/283'/0'/0/0",
+      }
+
+      const mockResponse = Buffer.from([
+        // Mock signature (64 bytes)
+        ...Array(64).fill(1),
+        // Return code (2 bytes)
+        0x90,
+        0x00,
+      ])
+      mockSend.mockResolvedValue(mockResponse)
+
+      const result = await app.signData(message, {
+        scope: 1,
+        encoding: 'base64',
+      })
+      expect(result.signature).toEqual(Buffer.from(Array(64).fill(1)))
     })
   })
 })
